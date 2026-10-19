@@ -1,12 +1,12 @@
 'use strict';
 const c=document.querySelector('canvas'),g=c.getContext('2d'),$=id=>document.getElementById(id);c.width=1280;c.height=720;const W=1280,H=720;
-const guns=[{name:'ショットガン',en:'SHOTGUN',desc:'近距離散弾 / 右クリック5回で装填',cap:8,rate:.7,reload:1.6},{name:'機関銃',en:'MACHINE GUN',desc:'約8秒連射 / 右クリック5回で装填',cap:96,rate:.085,reload:4},{name:'擲弾砲',en:'GRENADE LAUNCHER',desc:'遠距離範囲攻撃 / 補給5秒',cap:3,rate:1.1,reload:5},{name:'二丁拳銃',en:'DUAL PISTOLS',desc:'左右交互必須 / 軽い一撃で速射',cap:24,rate:.11,reload:1.2}];let selected=1,ammo=guns.map(x=>x.cap),enemies=[],fx=[],shells=[],groundMarks=[],state='ready',score=0,hp=10,wave=1,kills=0,spawn=1,elapsed=0,cool=0,reloading=0,heat=0,down=false,aim={x:640,y:400},shake=0,flash=0,side=1,audio,sound=false,last=0,best=0,damageFlash=0,defeatFade=0,lastHeavy=-999;
+const guns=[{name:'ショットガン',en:'SHOTGUN',desc:'近距離散弾 / PC右5回 / スマホ2回タップで補給',cap:8,rate:.7,reload:1.6},{name:'機関銃',en:'MACHINE GUN',desc:'約8秒連射 / PC右5回 / スマホ2回タップで補給',cap:96,rate:.085,reload:4},{name:'擲弾砲',en:'GRENADE LAUNCHER',desc:'遠距離範囲攻撃 / 補給5秒',cap:3,rate:1.1,reload:5},{name:'二丁拳銃',en:'DUAL PISTOLS',desc:'左右交互必須 / 軽い一撃で速射',cap:24,rate:.11,reload:1.2}];let selected=1,ammo=guns.map(x=>x.cap),enemies=[],fx=[],shells=[],groundMarks=[],state='ready',score=0,hp=10,wave=1,kills=0,spawn=1,elapsed=0,cool=0,reloading=0,heat=0,down=false,aim={x:640,y:400},shake=0,flash=0,side=1,audio,sound=false,last=0,best=0,damageFlash=0,defeatFade=0,lastHeavy=-999;
 try{best=+localStorage.getItem('ironRidgeBest')||0}catch{}$('best').textContent=best;
 guns.forEach((w,i)=>{let b=document.createElement('button');b.className='weapon';b.innerHTML=`<small>0${i+1} / ${w.en}</small><em>${i===1?'装備中':''}</em><strong>${w.name}</strong><span>${w.desc}</span>${i<3?`<div class="supply-label" id="supply-label-${i}">補給完了</div><div class="supply-track" id="supply-${i}" role="progressbar" aria-label="${w.name}の補給" aria-valuemin="0" aria-valuemax="100"><i id="supply-fill-${i}"></i></div>`:''}`;b.onclick=()=>choose(i);$('weapons').append(b)});
 let reloads=[0,0,0,0],hands=[12,12],handCool=[0,0],handFlash=[0,0],pistolGap=0,nextHand=-1,reloadClicks=[0,0,0,0];
-function choose(i){down=false;selected=i;reloading=reloads[i];document.querySelectorAll('.weapon').forEach((b,j)=>{b.classList.toggle('active',i===j);b.querySelector('em').textContent=i===j?'装備中':''});hud()}
-function hud(){$('wave').textContent=String(wave).padStart(2,'0');$('score').textContent=String(score).padStart(5,'0');$('hp').textContent=Math.max(0,hp);$('status').textContent=reloading>0?`リロード中… ${reloading.toFixed(1)}秒`:`${guns[selected].name}　${selected===3?'左 '+hands[0]+' / 右 '+hands[1]:ammo[selected]+' / '+guns[selected].cap}　${selected===3?'次：'+(nextHand<0?'左右どちらでも':nextHand===0?'左クリック':'右クリック'):selected===0||selected===1?'右クリックで装填 '+reloadClicks[selected]+' / 5':'弾薬補給：R'}`;$('heat').style.width=heat+'%';$('threat').textContent=`${wave===1?'接近する通常機':wave<4?'接近速度が上昇':wave<8?'装甲機・集団が出現':'高密度の集団攻撃'} · 次のWAVEまで ${Math.ceil(30-elapsed%30)}秒`;updateSupply()}
-function supplyStatus(i){let progress=100,label='補給完了',active=false;if(reloads[i]>0){progress=(1-reloads[i]/guns[i].reload)*100;label=`補給中 ${reloads[i].toFixed(1)}秒`;active=true}else if(ammo[i]<guns[i].cap){if(i<2){progress=reloadClicks[i]/5*100;label=`装填準備：右クリック ${reloadClicks[i]} / 5`}else{progress=0;label='Rで補給開始'}active=true}return {progress:Math.max(0,Math.min(100,progress)),label,active}}
+function choose(i){resetInput();selected=i;reloading=reloads[i];document.querySelectorAll('.weapon').forEach((b,j)=>{b.classList.toggle('active',i===j);b.querySelector('em').textContent=i===j?'装備中':''});hud()}
+function hud(){$('wave').textContent=String(wave).padStart(2,'0');$('score').textContent=String(score).padStart(5,'0');$('hp').textContent=Math.max(0,hp);$('status').textContent=reloading>0?`リロード中… ${reloading.toFixed(1)}秒`:`${guns[selected].name}　${selected===3?'左 '+hands[0]+' / 右 '+hands[1]:ammo[selected]+' / '+guns[selected].cap}　${selected===3?'次：'+(nextHand<0?'左右どちらでも':nextHand===0?(touchMode?'左半分をタップ':'左クリック'):(touchMode?'右半分をタップ':'右クリック')):selected===0||selected===1?(touchMode?'同じ場所をダブルタップで補給':'右クリックで装填 '+reloadClicks[selected]+' / 5'):'弾薬補給：R'}`;$('heat').style.width=heat+'%';$('threat').textContent=`${wave===1?'接近する通常機':wave<4?'接近速度が上昇':wave<8?'装甲機・集団が出現':'高密度の集団攻撃'} · 次のWAVEまで ${Math.ceil(30-elapsed%30)}秒`;updateSupply()}
+function supplyStatus(i){let progress=100,label='補給完了',active=false;if(reloads[i]>0){progress=(1-reloads[i]/guns[i].reload)*100;label=`補給中 ${reloads[i].toFixed(1)}秒`;active=true}else if(ammo[i]<guns[i].cap){if(i<2){progress=reloadClicks[i]/5*100;label=touchMode?'ダブルタップで補給開始':`装填準備：右クリック ${reloadClicks[i]} / 5`}else{progress=0;label='Rで補給開始'}active=true}return {progress:Math.max(0,Math.min(100,progress)),label,active}}
 function updateSupply(){$('share').href=reportUrl();for(let i=0;i<3;i++){let v=supplyStatus(i);$('supply-label-'+i).textContent=v.label;$('supply-fill-'+i).style.width=v.progress+'%';$('supply-'+i).setAttribute('aria-valuenow',Math.round(v.progress));$('supply-'+i).setAttribute('aria-valuetext',v.label);$('supply-'+i).classList.toggle('supplying',v.active)}}
 function tone(freq,dur=.05){if(!sound)return;try{audio??=new AudioContext();let o=audio.createOscillator(),v=audio.createGain();o.type='sawtooth';o.frequency.setValueAtTime(freq,audio.currentTime);o.frequency.exponentialRampToValueAtTime(35,audio.currentTime+dur);v.gain.setValueAtTime(.06,audio.currentTime);v.gain.exponentialRampToValueAtTime(.001,audio.currentTime+dur);o.connect(v).connect(audio.destination);o.start();o.stop(audio.currentTime+dur)}catch{}}
 function burst(x,y,n,color){for(let i=0;i<n;i++)fx.push({x,y,vx:(Math.random()-.5)*400,vy:(Math.random()-.65)*350,life:.3+Math.random()*.6,max:.9,color})}
@@ -18,9 +18,9 @@ if(selected===3){if((nextHand!==-1&&hand!==nextHand)||handCool[hand]>0||pistolGa
 if(cool>0)return;if(!ammo[selected]){if(selected===2)reload();return}ammo[selected]--;cool=w.rate;flash=.07;shake=selected===0?8:3;tone([100,160,65][selected],selected===2?.23:.06);
 if(selected===0){for(let i=0;i<9;i++)hit(aim.x+(Math.random()-.5)*105,aim.y+(Math.random()-.5)*80,28)}else if(selected===2){let depth=Math.max(0,Math.min(1,(aim.y-310)/380));shells.push({x:aim.x,y:aim.y,t:.55+(1-depth)*.4,radius:155-depth*70,damage:260-depth*180,selfDamage:depth>.75})}else{hit(aim.x+(Math.random()-.5)*12,aim.y,34);heat=(1-ammo[1]/w.cap)*100}if(!ammo[selected]&&selected===2)reload();hud()}
 function reload(manual=false){if((selected===0||selected===1)&&!manual)return;if(state==='play'&&!reloads[selected]&&ammo[selected]<guns[selected].cap){reloadClicks[selected]=0;reloads[selected]=guns[selected].reload;reloading=reloads[selected];hud()}}
-function hurt(amount){if(state!=='play')return;hp=Math.max(0,hp-amount);damageFlash=.65;shake=20;if(hp===0){state='over';down=false;best=Math.max(best,score);try{localStorage.setItem('ironRidgeBest',best)}catch{}$('best').textContent=best;$('title').textContent='あなたは防衛線を守れませんでした';$('message').textContent=`WAVE ${wave} / SCORE ${score} / ${kills}機を停止させました。`;$('start').textContent='再出撃 →';$('overlay').classList.remove('hidden')}hud()}
-function begin(){state='play';score=0;hp=10;wave=1;kills=0;enemies=[];fx=[];shells=[];groundMarks=[];elapsed=0;spawn=.4;heat=0;cool=0;reloading=0;ammo=guns.map(x=>x.cap);reloads=[0,0,0,0];hands=[12,12];handCool=[0,0];handFlash=[0,0];pistolGap=0;nextHand=-1;reloadClicks=[0,0,0,0];down=false;damageFlash=0;defeatFade=0;lastHeavy=-999;$('overlay').classList.add('hidden');hud()}
-function pause(){if(state==='play'){state='pause';down=false;$('title').textContent='一時停止';$('message').textContent='防衛線はあなたの帰還を待っています。';$('start').textContent='防衛を再開 →';$('overlay').classList.remove('hidden')}else if(state==='pause'){state='play';$('overlay').classList.add('hidden')}}
+function hurt(amount){if(state!=='play')return;hp=Math.max(0,hp-amount);damageFlash=.65;shake=20;if(hp===0){state='over';resetInput();best=Math.max(best,score);try{localStorage.setItem('ironRidgeBest',best)}catch{}$('best').textContent=best;$('title').textContent='あなたは防衛線を守れませんでした';$('message').textContent=`WAVE ${wave} / SCORE ${score} / ${kills}機を停止させました。`;$('start').textContent='再出撃 →';$('overlay').classList.remove('hidden')}hud()}
+function begin(){resetInput();state='play';score=0;hp=10;wave=1;kills=0;enemies=[];fx=[];shells=[];groundMarks=[];elapsed=0;spawn=.4;heat=0;cool=0;reloading=0;ammo=guns.map(x=>x.cap);reloads=[0,0,0,0];hands=[12,12];handCool=[0,0];handFlash=[0,0];pistolGap=0;nextHand=-1;reloadClicks=[0,0,0,0];down=false;damageFlash=0;defeatFade=0;lastHeavy=-999;$('overlay').classList.add('hidden');hud()}
+function pause(){resetInput();if(state==='play'){state='pause';down=false;$('title').textContent='一時停止';$('message').textContent='防衛線はあなたの帰還を待っています。';$('start').textContent='防衛を再開 →';$('overlay').classList.remove('hidden')}else if(state==='pause'){state='play';$('overlay').classList.add('hidden')}}
 $('start').onclick=()=>state==='pause'?pause():begin();$('pause').onclick=pause;$('reload').onclick=()=>reload();$('sound').onclick=()=>{sound=!sound;$('sound').textContent='音：'+(sound?'ON':'OFF');tone(300)};$('full').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $('arena').requestFullscreen?.()};
 window.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;if('1234'.includes(e.key))choose(+e.key-1);if(e.key.toLowerCase()==='r')reload();if(e.key.toLowerCase()==='p'&&!e.repeat)pause()});
 function shareText(){const situation=state==='over'?'あなたは防衛線を守れませんでした':state==='ready'?'防衛開始前':state==='pause'?'防衛中（一時停止）':'防衛中';return `【戦果報告】緑の稜線を越えて\nSCORE：${score}点 / WAVE：${wave}\n残りライフ：${hp}/10 / 撃破：${kills}機\n状況：${situation}\n装備：${guns[selected].name}\n#緑の稜線を越えて`}
@@ -28,13 +28,41 @@ function reportUrl(){return 'https://x.com/intent/tweet?text='+encodeURIComponen
 function prepareReport(){const url=reportUrl();$('share').href=url;if(state==='play')pause()}
 $('share').onclick=prepareReport;
 $('share').onauxclick=prepareReport;
+// Use one pointer path to avoid touch-generated compatibility mouse double firing.
+let touchMode=window.matchMedia?.('(pointer: coarse)').matches||false;
+let activePointer=null,lastTap=null;
+function resetInput(){down=false;lastTap=null;if(activePointer&&c.hasPointerCapture?.(activePointer.id))c.releasePointerCapture(activePointer.id);activePointer=null}
 function pointer(e){let r=c.getBoundingClientRect();aim={x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
 c.oncontextmenu=e=>e.preventDefault();
-c.onpointermove=pointer;
-c.onmousedown=e=>{if(e.button!==0&&e.button!==2)return;e.preventDefault();pointer(e);if(state!=='play')return;if(selected===3)fire(e.button===2?1:0);else if(e.button===0){down=true;fire()}else if((selected===0||selected===1)&&!reloads[selected]&&ammo[selected]<guns[selected].cap){reloadClicks[selected]++;if(reloadClicks[selected]>=5)reload(true);hud()}};
-c.onmouseup=e=>{if(e.button===0)down=false};
-c.onpointerdown=e=>{if(e.pointerType==='mouse')return;e.preventDefault();pointer(e);if(state==='play'){if(selected===3){fire(side===0?1:0)}else{down=true;fire()}c.setPointerCapture(e.pointerId)}};
-c.onpointerup=()=>down=false;c.onpointercancel=()=>down=false;window.onblur=()=>{down=false;if(state==='play')pause()};document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play')pause()});
+c.onpointerdown=e=>{
+ if(e.pointerType==='mouse'&&e.button!==0&&e.button!==2)return;
+ e.preventDefault();if(activePointer)return;
+ touchMode=e.pointerType!=='mouse';pointer(e);
+ if(state!=='play')return;
+ const second=touchMode&&selected<2&&lastTap&&lastTap.gun===selected&&e.timeStamp-lastTap.time<=300&&Math.hypot(e.clientX-lastTap.x,e.clientY-lastTap.y)<=32;
+ lastTap=null;
+ activePointer={id:e.pointerId,x:e.clientX,y:e.clientY,time:e.timeStamp,gun:selected,touch:touchMode,moved:false,reload:!!second};
+ c.setPointerCapture(e.pointerId);
+ if(second){down=false;reload(true)}
+ else if(selected===3)fire(touchMode?(aim.x<W/2?0:1):(e.button===2?1:0));
+ else if(touchMode||e.button===0){down=true;fire()}
+ else if(selected<2&&!reloads[selected]&&ammo[selected]<guns[selected].cap){reloadClicks[selected]++;if(reloadClicks[selected]>=5)reload(true)}
+ hud();
+};
+c.onpointermove=e=>{
+ if(activePointer&&activePointer.id!==e.pointerId)return;
+ pointer(e);
+ if(activePointer&&Math.hypot(e.clientX-activePointer.x,e.clientY-activePointer.y)>20)activePointer.moved=true;
+};
+c.onpointerup=e=>{
+ if(!activePointer||activePointer.id!==e.pointerId)return;
+ const p=activePointer;down=false;activePointer=null;
+ if(p.touch&&!p.reload&&!p.moved&&p.gun===selected&&selected<2&&state==='play'&&e.timeStamp-p.time<=200&&Math.hypot(e.clientX-p.x,e.clientY-p.y)<=20)lastTap={x:e.clientX,y:e.clientY,time:e.timeStamp,gun:selected};
+ if(c.hasPointerCapture?.(e.pointerId))c.releasePointerCapture(e.pointerId);
+};
+c.onpointercancel=e=>{if(activePointer?.id===e.pointerId)resetInput()};
+c.onlostpointercapture=e=>{if(activePointer?.id===e.pointerId)resetInput()};
+window.onblur=()=>{resetInput();if(state==='play')pause()};document.addEventListener('visibilitychange',()=>{if(document.hidden){resetInput();if(state==='play')pause()}});
 function difficulty(w){return {interval:Math.max(.65,2.4*Math.pow(.88,w-1)),speed:Math.min(.065,.024+(w-1)*.0026),armorChance:Math.min(.5,Math.max(0,(w-2)*.055)),armorHP:Math.min(220,150+Math.max(0,w-3)*10),group:w<4?1:w<8?2:3}}
 function spawnGroup(w){const d=difficulty(w),count=w<4?1:1+Math.floor(Math.random()*d.group);const center=130+Math.random()*1020;for(let i=0;i<count;i++){let x=Math.max(55,Math.min(1225,center+(i-(count-1)/2)*90));let heavy=w>=3&&elapsed-lastHeavy>=25&&!enemies.some(e=>e.heavy&&!e.dead)&&Math.random()<.08;if(heavy)lastHeavy=elapsed;let armored=heavy||Math.random()<d.armorChance;enemies.push({x,z:-i*.025,seed:Math.random()*10,type:armored,heavy,hp:heavy?800:armored?d.armorHP:100,maxHP:heavy?800:armored?d.armorHP:100,speed:d.speed*(heavy?.65:armored?.85:1),sx:x,sy:ridge(x),size:40})}return d.interval*(.85+Math.random()*.3)}
 function ridge(x){return 338+Math.sin(x*.005)*28+Math.sin(x*.011+1)*13}
